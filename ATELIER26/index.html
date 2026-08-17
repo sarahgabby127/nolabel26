@@ -506,21 +506,34 @@ async function persistProducts(){
     showToast("Session admin expirée, reconnecte-toi.");
     return false;
   }
-  const res = await fetch("/api/products", {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + adminToken,
-    },
-    body: JSON.stringify(products),
-  });
+  let res;
+  try{
+    res = await fetch("/api/products", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + adminToken,
+      },
+      body: JSON.stringify(products),
+    });
+  }catch(e){
+    showToast("Impossible de contacter le serveur. Vérifie ta connexion.");
+    return false;
+  }
   if(res.status === 401){
     adminToken = null;
     sessionStorage.removeItem("nolabel26_token");
     showToast("Session expirée, reconnecte-toi.");
     return false;
   }
-  return res.ok;
+  if(!res.ok){
+    let detail = "";
+    try{ const data = await res.json(); detail = data.error || ""; }catch{}
+    showToast("Échec de l'enregistrement" + (detail ? " : " + detail : "") + " (voir console)");
+    console.error("Échec de la sauvegarde des produits :", res.status, detail);
+    return false;
+  }
+  return true;
 }
 
 
@@ -937,13 +950,14 @@ async function saveProduct(){
     images: currentImages.slice(),
     sold: document.getElementById("fSold").checked,
   };
+  const backup = products;
   if(editingId){
     products = products.map(p=>p.id===editingId ? product : p);
   } else {
-    products.push(product);
+    products = [...products, product];
   }
   const ok = await persistProducts();
-  if(!ok) return;
+  if(!ok){ products = backup; return; }
   resetForm();
   renderAdminList();
   renderFilters();
